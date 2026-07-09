@@ -1,11 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
 
-// ─────────────────────────────────────────────────────────────
-// 식단기록 — 웹(데스크탑) 버전
-// 테마: 로즈핑크 / 분류: 패스트푸드·일반식·건강식 (AI 자동 분류)
-// 저장: 지금은 세션 메모리(useState). Claude Code로 옮길 때
-//       [저장] 표시된 부분을 localStorage로 교체하면 영구 저장됨.
-// ─────────────────────────────────────────────────────────────
 
 const CATS = {
   fast: { label: "패스트푸드", color: "#E8425A", soft: "#FCE2E7" },
@@ -27,7 +21,6 @@ function fmtCardDate(d) {
   return `${d.getMonth() + 1}월 ${d.getDate()}일 ${WEEKDAYS[d.getDay()]}요일`;
 }
 
-// ── AI 분류 (아티팩트 내장 Claude 호출) ──
 async function classifyFood(name) {
   try {
     const res = await fetch("/api/classify", {
@@ -50,6 +43,35 @@ async function classifyFood(name) {
   } catch (error) {
     console.error("분류 요청 오류:", error);
     return "normal";
+  }
+}
+
+async function estimateCalories(name) {
+  try {
+    const res = await fetch("/api/calories", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ name }),
+    });
+
+    if (!res.ok) {
+      throw new Error(`칼로리 요청 실패: ${res.status}`);
+    }
+
+    const data = await res.json();
+
+    return {
+      calories: data.calories,
+      serving: data.serving,
+      confidence: data.confidence,
+      note: data.note,
+    };
+  } catch (error) {
+    console.error("칼로리 추정 오류:", error);
+
+    return null;
   }
 }
 
@@ -86,7 +108,6 @@ export default function FoodLogWeb() {
     localStorage.setItem("foodLogs", JSON.stringify(logs));
   }, [logs]);
 
-  // 키보드 좌우 화살표로 날짜 이동
   useEffect(() => {
     function onKey(e) {
       if (document.activeElement?.tagName === "INPUT") return;
@@ -101,11 +122,21 @@ export default function FoodLogWeb() {
     const name = input.trim();
     if (!name || busy) return;
     setBusy(true);
-    const cat = await classifyFood(name);
+    const [cat, calorieInfo] = await Promise.all([
+      classifyFood(name),
+      estimateCalories(name),
+    ]);
+    console.log("cat:", cat);
+    console.log("calorieInfo:", calorieInfo);
     setLogs((prev) => {
       // [저장]
       const day = prev[curKey] ? [...prev[curKey]] : [];
-      day.push({ id: Date.now(), name, cat });
+      day.push({
+         id: Date.now(),
+        name,
+        cat,
+      calorieInfo,
+     });
       return { ...prev, [curKey]: day };
     });
     setInput("");
@@ -119,7 +150,6 @@ export default function FoodLogWeb() {
     }));
   }
 
-  // 주간 통계
   function weekStats() {
     const base = addDays(today, offset);
     const sunday = addDays(base, -base.getDay());
@@ -148,7 +178,7 @@ export default function FoodLogWeb() {
         {/* 헤더 */}
         <header style={S.header}>
           <div style={S.logo}>
-            <span style={S.logoMark}>🍒</span> 오늘 뭐 먹었나
+            <span style={S.logoMark}>🍒</span> 왜 먹었지
           </div>
           <div style={S.sub}>먹은 걸 적으면 AI가 알아서 분류해요</div>
         </header>
