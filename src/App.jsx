@@ -203,19 +203,11 @@ export default function FoodLogWeb() {
       }),
     });
 
-    const saveText = await saveRes.text();
-
-    let saveResult;
-
-    try {
-      saveResult = saveText ? JSON.parse(saveText) : {};
-    } catch {
-      saveResult = { raw: saveText };
-    }
+    const savedRow = await saveRes.json();
 
     if (!saveRes.ok) {
-      console.error("기록 저장 API 오류:", saveResult);
-
+      console.error("기록 저장 API 오류:", savedRow);
+    
       throw new Error(
         saveResult.detail ||
         saveResult.error ||
@@ -223,7 +215,6 @@ export default function FoodLogWeb() {
       );
     }
 
-    const savedRow = await saveRes.json();
     const savedItem = rowToItem(savedRow);
 
     setLogs((prev) => ({
