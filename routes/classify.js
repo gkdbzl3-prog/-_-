@@ -10,10 +10,8 @@ if (!apiKey) {
   throw new Error("ANTHROPIC_API_KEY가 .env에 설정되지 않았어.");
 }
 
-router.post("/", async (req, res) => {
-  const anthropic = new Anthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY,
-  });
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
 const allowedCategories = new Set([
