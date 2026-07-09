@@ -532,12 +532,13 @@ const S = {
 
   header: { marginBottom: 28 },
   logo: {
-    fontSize: 26,
-    fontWeight: 800,
-    letterSpacing: "-0.5px",
+    fontFamily: "'Jua', 'Pretendard', sans-serif",
+    fontSize: 30,
+    fontWeight: 400,
+    letterSpacing: "0.2px",
     color: "#E8425A",
   },
-  logoMark: { color: "#F0637A", marginRight: 6 },
+  logoMark: { fontFamily: "'Pretendard', sans-serif", marginRight: 8 },
   sub: { marginTop: 6, fontSize: 14, color: "#B0707E" },
 
   grid: {
@@ -614,9 +615,23 @@ const S = {
     justifyContent: "space-between",
     gap: 12,
   },
-  foodName: { fontSize: 15.5, fontWeight: 600 },
-  rowRight: { display: "flex", alignItems: "center", gap: 9 },
-  badge: { fontSize: 12, fontWeight: 700, padding: "4px 12px", borderRadius: 20 },
+  foodName: {
+    fontSize: 15.5,
+    fontWeight: 600,
+    flex: 1,
+    minWidth: 0,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  rowRight: { display: "flex", alignItems: "center", gap: 9, flexShrink: 0 },
+  badge: {
+    fontSize: 12,
+    fontWeight: 700,
+    padding: "4px 12px",
+    borderRadius: 20,
+    whiteSpace: "nowrap",
+  },
   del: {
     border: "none",
     background: "none",
@@ -723,6 +738,7 @@ const S = {
     display: "flex",
     alignItems: "center",
     gap: 6,
+    whiteSpace: "nowrap",
   },
   dot: { width: 10, height: 10, borderRadius: 5, display: "inline-block" },
 
@@ -775,7 +791,7 @@ const S = {
   summaryHead: { fontSize: 14, fontWeight: 700, marginBottom: 14, color: "#8A5A64" },
   summaryBars: { display: "flex", flexDirection: "column", gap: 12 },
   summaryLine: { display: "flex", alignItems: "center", gap: 12 },
-  summaryLabel: { width: 66, fontSize: 12.5, color: "#8A5A64", fontWeight: 600 },
+  summaryLabel: { width: 72, fontSize: 12.5, color: "#8A5A64", fontWeight: 600, whiteSpace: "nowrap" },
   summaryTrack: {
     flex: 1,
     height: 13,
