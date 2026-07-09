@@ -52,7 +52,7 @@ function groupRowsByDate(rows) {
     const key = row.log_date;
 
     if (!grouped[key]) {
-      grouped[key];
+      grouped[key] = [];
     }
 
     grouped[key].push(rowToItem(row));
@@ -203,8 +203,24 @@ export default function FoodLogWeb() {
       }),
     });
 
+    const saveText = await saveRes.text();
+
+    let saveResult;
+
+    try {
+      saveResult = saveText ? JSON.parse(saveText) : {};
+    } catch {
+      saveResult = { raw: saveText };
+    }
+
     if (!saveRes.ok) {
-      throw new Error(`기록 저장 실패: ${saveRes.status}`);
+      console.error("기록 저장 API 오류:", saveResult);
+
+      throw new Error(
+        saveResult.detail ||
+        saveResult.error ||
+        `기록 저장 실패: ${saveRes.status}`
+      );
     }
 
     const savedRow = await saveRes.json();

@@ -48,6 +48,10 @@ router.post("/", async (req, res) => {
 
         return res.status(500).json({
             error: "failed to save food log",
+            detail: error.message,
+            code: error.code,
+            hint: error.hint,
+            details: error.details,
         });
     }
 
