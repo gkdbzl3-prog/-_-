@@ -2,6 +2,7 @@ import express from 'express';
 import dotenv from 'dotenv';
 import classifyRouter from './routes/classify.js';
 import caloriesRouter from "./routes/calories.js";
+import logsRouter from "./routes/logs.js";
 
 dotenv.config();
 
@@ -18,3 +19,4 @@ app.use(express.static('public'));
 
 app.use('/api/classify', classifyRouter);
 app.use("/api/calories", caloriesRouter);
+app.use("/api/logs", logsRouter);

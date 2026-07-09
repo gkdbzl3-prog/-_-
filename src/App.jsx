@@ -21,6 +21,46 @@ function fmtCardDate(d) {
   return `${d.getMonth() + 1}월 ${d.getDate()}일 ${WEEKDAYS[d.getDay()]}요일`;
 }
 
+function rowToItem(row) {
+  const hasCalories = 
+  row.calories_min !== null &&
+  row.calories_max !== null &&
+  row.calories_estimate !== null;
+
+  return {
+    id: row.id,
+    name: row.name,
+    cat: row.category,
+
+    calorieInfo: hasCalories
+    ? {
+      calories: {
+        min: row.calories_min,
+        max:  row.calories_max,
+        estimate: row.calories_estimate,
+      },
+      serving: row.serving,
+      confidence: row.confidence,
+      note: row.note,
+    }
+    : null,
+  };
+}
+
+function groupRowsByDate(rows) {
+  return rows.reduce((grouped, row) => {
+    const key = row.log_date;
+
+    if (!grouped[key]) {
+      grouped[key];
+    }
+
+    grouped[key].push(rowToItem(row));
+
+    return grouped;
+  }, {});
+}
+
 async function classifyFood(name) {
   try {
     const res = await fetch("/api/classify", {
@@ -78,17 +118,8 @@ async function estimateCalories(name) {
 export default function FoodLogWeb() {
   const [today] = useState(() => new Date());
   const [offset, setOffset] = useState(0);
-  const [logs, setLogs] = useState(() => {
-    const saved = localStorage.getItem("foodLogs");
-
-    if (!saved) return {};
-
-    try {
-      return JSON.parse(saved);
-    } catch {
-      return {};
-    }
-  });
+  const [logs, setLogs] = useState({});
+  const [logsLoading, setLogsLoading] = useState(true);
 
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -105,8 +136,36 @@ export default function FoodLogWeb() {
   }
 
   useEffect(() => {
-    localStorage.setItem("foodLogs", JSON.stringify(logs));
-  }, [logs]);
+    let ignore = false;
+
+    async function loadLogs() {
+      try {
+        const res = await fetch("/api/logs");
+
+        if (!res.ok) {
+          throw new Error(`기록 조회 실패: ${res.status}`);
+        }
+
+        const rows = await res.json();
+
+        if (!ignore) {
+          setLogs(groupRowsByDate(rows));
+        }
+      } catch (error) {
+        console.error("식단 기록 조회 오류:", error);
+      } finally {
+        if (!ignore) {
+          setLogsLoading(false);
+        }
+      }
+    }
+
+    loadLogs();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   useEffect(() => {
     function onKey(e) {
@@ -120,28 +179,52 @@ export default function FoodLogWeb() {
 
   async function addFood() {
     const name = input.trim();
+
     if (!name || busy) return;
+
     setBusy(true);
+
+    try {
     const [cat, calorieInfo] = await Promise.all([
       classifyFood(name),
       estimateCalories(name),
     ]);
-    console.log("cat:", cat);
-    console.log("calorieInfo:", calorieInfo);
-    setLogs((prev) => {
-      // [저장]
-      const day = prev[curKey] ? [...prev[curKey]] : [];
-      day.push({
-         id: Date.now(),
+
+    const saveRes = await fetch("/api/logs", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        logDate: curKey,
         name,
-        cat,
-      calorieInfo,
-     });
-      return { ...prev, [curKey]: day };
+        category: cat,
+        calorieInfo,
+      }),
     });
+
+    if (!saveRes.ok) {
+      throw new Error(`기록 저장 실패: ${saveRes.status}`);
+    }
+
+    const savedRow = await saveRes.json();
+    const savedItem = rowToItem(savedRow);
+
+    setLogs((prev) => ({
+      ...prev,
+      [curKey] : [
+        ...(prev[curKey] || []),
+        savedItem,
+      ],
+    }));
+
     setInput("");
+  } catch (error) {
+    console.error("음식 기록 추가 오류:", error);
+  } finally {
     setBusy(false);
   }
+}
 
   function removeFood(id) {
     setLogs((prev) => ({
