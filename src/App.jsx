@@ -61,6 +61,33 @@ function groupRowsByDate(rows) {
   }, {});
 }
 
+function getDisplayNote(note) {
+  const text = note?.trim();
+
+  if (!text) {
+    return "";
+  }
+
+  const genericNotes = [
+    "일반적인 제품 기준 추정치입니다.",
+    "일반적인 제품의 수치입니다.",
+    "일반적인 제품을 기준으로 추정했습니다.",
+    "대략적인 추정치입니다.",
+  ];
+
+  return genericNotes.includes(text) ? "" : text;
+}
+
+function getConfidenceLabel(confidence) {
+  const labels = {
+    high: "높은 확신",
+    medium: "보통 확신",
+    low: "낮은 확신",
+  };
+
+  return labels[confidence] || "";
+}
+
 async function classifyFood(name) {
   try {
     const res = await fetch("/api/classify", {
@@ -304,29 +331,75 @@ export default function FoodLogWeb() {
                 </div>
               ) : (
                 <ul style={S.list}>
-                  {items.map((f) => (
-                    <li key={f.id} style={S.foodRow}>
-                      <span style={S.foodName}>{f.name}</span>
-                      <span style={S.rowRight}>
-                        <span
-                          style={{
-                            ...S.badge,
-                            background: CATS[f.cat].soft,
-                            color: CATS[f.cat].color,
-                          }}
-                        >
-                          {CATS[f.cat].label}
-                        </span>
-                        <button
-                          style={S.del}
-                          onClick={() => removeFood(f.id)}
-                          aria-label="삭제"
-                        >
-                          ×
-                        </button>
-                      </span>
-                    </li>
-                  ))}
+                    {items.map((f) => {
+                      const info = f.calorieInfo;
+                      const note = getDisplayNote(info?.note);
+                      const confidenceLabel = getConfidenceLabel(info?.confidence);
+
+                      return (
+                        <li key={f.id} style={S.foodRow}>
+                          <div style={S.foodTop}>
+                            <span style={S.foodName}>{f.name}</span>
+
+                            <span style={S.rowRight}>
+                              <span
+                                style={{
+                                  ...S.badge,
+                                  background: CATS[f.cat].soft,
+                                  color: CATS[f.cat].color,
+                                }}
+                              >
+                                {CATS[f.cat].label}
+                              </span>
+
+                              <button
+                                style={S.del}
+                                onClick={() => removeFood(f.id)}
+                                aria-label="삭제"
+                              >
+                                ×
+                              </button>
+                            </span>
+                          </div>
+
+                          {info && (
+                            <div style={S.aiAnswer}>
+                              <div style={S.calorieLine}>
+                                <strong style={S.calorieEstimate}>
+                                  약 {info.calories.estimate.toLocaleString()} kcal
+                                </strong>
+
+                                {info.serving && (
+                                  <span style={S.serving}>· {info.serving}</span>
+                                )}
+                              </div>
+
+                              <div style={S.calorieMeta}>
+                                <span>
+                                  예상 범위 {info.calories.min.toLocaleString()}
+                                  {"–"}
+                                  {info.calories.max.toLocaleString()} kcal
+                                </span>
+
+                                {confidenceLabel && (
+                                  <>
+                                    <span style={S.metaDivider}>·</span>
+                                    <span>{confidenceLabel}</span>
+                                  </>
+                                )}
+                              </div>
+
+                              {note && (
+                                <div style={S.aiNote}>
+                                  <span style={S.aiMark}>AI</span>
+                                  <span>{note}</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </li>
+                      );
+                    })}
                 </ul>
               )}
             </div>
@@ -532,11 +605,14 @@ const S = {
   },
   list: { listStyle: "none", margin: 0, padding: 0 },
   foodRow: {
+    padding: "14px 16px",
+    borderBottom: "1px solid #FBEEF1",
+  },
+  foodTop: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: "14px 16px",
-    borderBottom: "1px solid #FBEEF1",
+    gap: 12,
   },
   foodName: { fontSize: 15.5, fontWeight: 600 },
   rowRight: { display: "flex", alignItems: "center", gap: 9 },
@@ -550,7 +626,64 @@ const S = {
     lineHeight: 1,
     padding: "0 2px",
   },
+  aiAnswer: {
+    marginTop: 10,
+    padding: "11px 13px",
+    borderRadius: 13,
+    background: "#FFF7F9",
+    border: "1px solid #FBE7EC",
+  },
 
+  calorieLine: {
+    display: "flex",
+    alignItems: "baseline",
+    flexWrap: "wrap",
+    gap: 5,
+  },
+
+  calorieEstimate: {
+    fontSize: 15,
+    color: "#D93B55",
+  },
+
+  serving: {
+    fontSize: 13,
+    color: "#8F626C",
+  },
+
+  calorieMeta: {
+    display: "flex",
+    alignItems: "center",
+    flexWrap: "wrap",
+    marginTop: 4,
+    fontSize: 11.5,
+    color: "#B17F89",
+  },
+
+  metaDivider: {
+    margin: "0 5px",
+  },
+
+  aiNote: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 7,
+    marginTop: 9,
+    fontSize: 12.5,
+    lineHeight: 1.5,
+    color: "#754852",
+  },
+
+  aiMark: {
+    flexShrink: 0,
+    marginTop: 1,
+    padding: "1px 6px",
+    borderRadius: 7,
+    background: "#F8DDE4",
+    color: "#D94B63",
+    fontSize: 10,
+    fontWeight: 800,
+  },
   inputBar: { display: "flex", gap: 9, marginTop: 16 },
   input: {
     flex: 1,
