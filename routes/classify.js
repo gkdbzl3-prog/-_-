@@ -14,9 +14,6 @@ router.post("/", async (req, res) => {
   const anthropic = new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY,
   });
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-  });
 });
 
 const allowedCategories = new Set([
