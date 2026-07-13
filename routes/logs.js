@@ -13,6 +13,7 @@ router.post("/", async (req, res) => {
         reason,
         hunger,
         source,
+        mealType,
     } = req.body;
 
     if (
@@ -47,6 +48,8 @@ router.post("/", async (req, res) => {
         reason: typeof reason === "string" && reason.trim() ? reason.trim() : null,
         hunger: typeof hunger === "string" && hunger.trim() ? hunger.trim() : null,
         source: typeof source === "string" && source.trim() ? source.trim() : null,
+        meal_type:
+        typeof mealType === "string" && mealType.trim() ? mealType.trim() : null,
     };
 
     const { data, error } = await supabase
@@ -90,7 +93,7 @@ router.get("/", async (req, res) => {
 
 router.patch("/:id", async (req, res) => {
     const { id } = req.params;
-    const { reason, hunger, source } = req.body;
+    const { reason, hunger, source, meal_type } = req.body;
 
     // 전달된 필드만 갱신한다. 명시적으로 null 을 보내면 태그 해제(선택 취소)로 처리.
     const patch = {};
@@ -106,6 +109,12 @@ router.patch("/:id", async (req, res) => {
     if ("source" in req.body) {
         patch.source =
             typeof source === "string" && source.trim() ? source.trim() : null;
+    }
+    if ("meal_type" in req.body) {
+        patch.meal_type =
+            typeof meal_type === "string" && meal_type.trim()
+                ? meal_type.trim()
+                : null;
     }
 
     if (Object.keys(patch).length === 0) {

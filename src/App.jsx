@@ -24,6 +24,16 @@ const REASON_OPTIONS = [
 // 먹기 전 상태
 const HUNGER_OPTIONS = ["많이 배고픔", "조금 배고픔", "안 배고픔"];
 
+// 식사 유형
+const MEALTYPE_OPTIONS = [
+  "한 끼 식사",
+  "간식",
+  "디저트",
+  "음료",
+  "야식",
+  "추가 음식",
+];
+
 // 어디서 먹었어 — 출처
 const SOURCE_OPTIONS = ["직접 조리", "집밥", "외식", "배달", "편의점", "카페"];
 
@@ -77,23 +87,6 @@ function keyToDate(key) {
   return new Date(y, m - 1, d);
 }
 
-// 최근에 먹은 순서로 중복 없는 음식명 (빠른 추가용)
-function recentDistinctFoods(logs, limit) {
-  const seen = [];
-  Object.keys(logs)
-    .sort()
-    .reverse()
-    .forEach((k) => {
-      (logs[k] || [])
-        .slice()
-        .reverse()
-        .forEach((f) => {
-          if (!seen.includes(f.name)) seen.push(f.name);
-        });
-    });
-  return seen.slice(0, limit);
-}
-
 // 모든 기록을 날짜와 함께 펼치고 최신순 정렬 (검색·필터용)
 function flattenLogs(logs) {
   const all = [];
@@ -129,6 +122,7 @@ function rowToItem(row) {
     reason: row.reason ?? null,
     hunger: row.hunger ?? null,
     source: row.source ?? null,
+    meal_type: row.meal_type ?? null,
     nutrition: row.nutrition ?? null,
 
     calorieInfo: hasCalories
@@ -433,37 +427,6 @@ export default function FoodLogWeb() {
     }
   }
 
-  // 빠른 추가: 최근 먹은 음식 칩을 한 번 탭해서 그대로 추가
-  async function quickAdd(name) {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await addFoodByName(name);
-    } catch (error) {
-      console.error("빠른 추가 오류:", error);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  // 어제(현재 보고 있는 날의 전날)와 동일하게 추가
-  async function repeatYesterday() {
-    if (busy) return;
-    const yItems = logs[dateKey(addDays(curDate, -1))] || [];
-    if (yItems.length === 0) return;
-
-    setBusy(true);
-    try {
-      for (const it of yItems) {
-        await addFoodByName(it.name, { openChips: false });
-      }
-    } catch (error) {
-      console.error("어제와 동일 추가 오류:", error);
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function removeFood(id) {
     try {
       const res = await fetch(`/api/logs/${id}`, {
@@ -571,10 +534,6 @@ export default function FoodLogWeb() {
   const week = weekStats();
   const maxTotal = Math.max(1, ...week.map((w) => w.total));
 
-  // 빠른 추가: 최근 음식 + 어제와 동일
-  const recentFoods = recentDistinctFoods(logs, 8);
-  const hasYesterday = (logs[dateKey(addDays(curDate, -1))] || []).length > 0;
-
   return (
     <div style={S.page}>
       <style>{css}</style>
@@ -670,32 +629,6 @@ export default function FoodLogWeb() {
               )}
             </div>
 
-            {(recentFoods.length > 0 || hasYesterday) && (
-              <div style={S.quickAdd}>
-                <span style={S.quickLabel}>빠른 추가</span>
-                {hasYesterday && (
-                  <button
-                    style={{ ...S.chip, ...S.quickRepeat }}
-                    onClick={repeatYesterday}
-                    disabled={busy}
-                  >
-                    ⟳ 어제와 동일
-                  </button>
-                )}
-                {recentFoods.map((name) => (
-                  <button
-                    key={name}
-                    style={S.chip}
-                    onClick={() => quickAdd(name)}
-                    disabled={busy}
-                    title={`${name} 추가`}
-                  >
-                    {name}
-                  </button>
-                ))}
-              </div>
-            )}
-
             <div style={S.inputBar}>
               <input
                 style={S.input}
@@ -772,10 +705,12 @@ function SearchView({ logs, onPickDay }) {
   const [cat, setCat] = useState("all");
   const [source, setSource] = useState("all");
   const [reason, setReason] = useState("all");
+  const [mealType, setMealType] = useState("all");
 
   const all = flattenLogs(logs);
   const sources = [...new Set(all.map((f) => f.source).filter(Boolean))];
   const reasons = [...new Set(all.map((f) => f.reason).filter(Boolean))];
+  const mealTypes = [...new Set(all.map((f) => f.meal_type).filter(Boolean))];
   const topFoods = foodFrequency(all).slice(0, 6);
 
   const q = query.trim().toLowerCase();
@@ -784,7 +719,8 @@ function SearchView({ logs, onPickDay }) {
       (!q || f.name.toLowerCase().includes(q)) &&
       (cat === "all" || f.cat === cat) &&
       (source === "all" || f.source === source) &&
-      (reason === "all" || f.reason === reason)
+      (reason === "all" || f.reason === reason) &&
+      (mealType === "all" || f.meal_type === mealType)
   );
 
   // 검색어가 있으면 통계 한 줄 (총 횟수 + 주로 무슨 요일)
@@ -884,6 +820,26 @@ function SearchView({ logs, onPickDay }) {
         </div>
       )}
 
+      {mealTypes.length > 0 && (
+        <div style={S.filterRow}>
+          <button
+            style={fchip(mealType === "all")}
+            onClick={() => setMealType("all")}
+          >
+            유형 전체
+          </button>
+          {mealTypes.map((m) => (
+            <button
+              key={m}
+              style={fchip(mealType === m)}
+              onClick={() => setMealType(m)}
+            >
+              {m}
+            </button>
+          ))}
+        </div>
+      )}
+
       {stat && <div style={S.searchStat}>{stat}</div>}
       <div style={S.searchCount}>{results.length}개 기록</div>
 
@@ -915,9 +871,10 @@ function SearchView({ logs, onPickDay }) {
                   {CATS[f.cat].label}
                 </span>
               </button>
-              {(f.source || f.reason) && (
+              {(f.source || f.meal_type || f.reason) && (
                 <div style={S.resultTags}>
                   {f.source && <span style={S.tagPill}>{f.source}</span>}
+                  {f.meal_type && <span style={S.tagPill}>{f.meal_type}</span>}
                   {f.reason && <span style={S.tagPill}>{f.reason}</span>}
                 </div>
               )}
@@ -1199,7 +1156,7 @@ function FoodItem({
   const accuracy = getAccuracy(info);
 
   // 편집창이 닫혀있을 때 보여줄 선택된 태그 요약
-  const summary = [f.reason, f.source, f.hunger].filter(Boolean);
+  const summary = [f.reason, f.source, f.meal_type, f.hunger].filter(Boolean);
 
   function submitCustom() {
     const v = customText.trim();
@@ -1356,6 +1313,13 @@ function FoodItem({
             options={sourceOptions}
             value={f.source}
             onPick={(v) => onTag(f.id, "source", v)}
+          />
+
+          <ChipGroup
+            label="식사 유형"
+            options={MEALTYPE_OPTIONS}
+            value={f.meal_type}
+            onPick={(v) => onTag(f.id, "meal_type", v)}
           />
 
           <ChipGroup
@@ -1800,26 +1764,6 @@ const S = {
   },
   nutriDotOn: { background: "#E8637A" },
   nutriDisc: { marginTop: 8, fontSize: 11, color: "#C0929B" },
-
-  // 빠른 추가 strip
-  quickAdd: {
-    display: "flex",
-    flexWrap: "wrap",
-    alignItems: "center",
-    gap: 7,
-    marginTop: 14,
-  },
-  quickLabel: {
-    fontSize: 12,
-    fontWeight: 800,
-    color: "#8A5A64",
-    marginRight: 2,
-  },
-  quickRepeat: {
-    color: "#D93B55",
-    borderColor: "#F5B9C4",
-    fontWeight: 700,
-  },
 
   // 찾기(검색·필터) 화면
   searchWrap: {
