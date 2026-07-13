@@ -3,6 +3,8 @@ import dotenv from 'dotenv';
 import classifyRouter from './routes/classify.js';
 import caloriesRouter from "./routes/calories.js";
 import logsRouter from "./routes/logs.js";
+import retrospectRouter from "./routes/retrospect.js";
+import nutritionRouter from "./routes/nutrition.js";
 
 dotenv.config();
 
@@ -20,3 +22,5 @@ app.use(express.static('public'));
 app.use('/api/classify', classifyRouter);
 app.use("/api/calories", caloriesRouter);
 app.use("/api/logs", logsRouter);
+app.use("/api/retrospect", retrospectRouter);
+app.use("/api/nutrition", nutritionRouter);
