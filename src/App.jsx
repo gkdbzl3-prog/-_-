@@ -1,4 +1,15 @@
 import React, { useState, useRef, useEffect } from "react";
+import { createClient } from "@supabase/supabase-js";
+
+// 로그인 액세스 토큰(모듈 전역). 인증 상태가 바뀔 때 갱신된다.
+let accessToken = null;
+
+// 모든 /api 요청에 Authorization 헤더를 붙이는 fetch 래퍼
+function authFetch(url, opts = {}) {
+  const headers = { ...(opts.headers || {}) };
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+  return fetch(url, { ...opts, headers });
+}
 
 
 const CATS = {
@@ -186,7 +197,7 @@ function getAccuracy(info) {
 
 // 월간 회고: 서버에 이번 달 기록을 보내 '발견' 목록을 받는다.
 async function fetchReview({ monthLabel, records, prevRatio }) {
-  const res = await fetch("/api/retrospect", {
+  const res = await authFetch("/api/retrospect", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ monthLabel, records, prevRatio }),
@@ -219,7 +230,7 @@ function writeReviewCache(key, val) {
 
 async function classifyFood(name) {
   try {
-    const res = await fetch("/api/classify", {
+    const res = await authFetch("/api/classify", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name }),
@@ -244,7 +255,7 @@ async function classifyFood(name) {
 
 async function estimateCalories(name) {
   try {
-    const res = await fetch("/api/calories", {
+    const res = await authFetch("/api/calories", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -274,7 +285,7 @@ async function estimateCalories(name) {
 
 async function estimateNutrition(name) {
   try {
-    const res = await fetch("/api/nutrition", {
+    const res = await authFetch("/api/nutrition", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name }),
@@ -292,7 +303,182 @@ async function estimateNutrition(name) {
   }
 }
 
-export default function FoodLogWeb() {
+// 전체화면 안내 메시지 (로딩/설정오류)
+function Screen({ children }) {
+  return (
+    <div style={S.page}>
+      <style>{css}</style>
+      <div style={S.screenBox}>{children}</div>
+    </div>
+  );
+}
+
+// 최상위: 설정 로드 → Supabase 초기화 → 세션에 따라 로그인/앱 표시
+export default function App() {
+  const [supabase, setSupabase] = useState(null);
+  const [session, setSession] = useState(null);
+  const [ready, setReady] = useState(false);
+  const [configError, setConfigError] = useState("");
+
+  useEffect(() => {
+    let subscription;
+
+    (async () => {
+      try {
+        const res = await fetch("/api/config");
+        const cfg = await res.json();
+
+        if (!cfg.url || !cfg.anonKey) {
+          setConfigError(
+            "로그인 설정이 없어요. 서버 .env 의 SUPABASE_ANON_KEY 를 채워주세요."
+          );
+          setReady(true);
+          return;
+        }
+
+        const client = createClient(cfg.url, cfg.anonKey);
+        setSupabase(client);
+
+        const { data } = await client.auth.getSession();
+        setSession(data.session);
+        accessToken = data.session?.access_token ?? null;
+
+        const listener = client.auth.onAuthStateChange((_event, s) => {
+          setSession(s);
+          accessToken = s?.access_token ?? null;
+        });
+        subscription = listener.data.subscription;
+
+        setReady(true);
+      } catch (error) {
+        console.error("설정 로드 오류:", error);
+        setConfigError("서버 설정을 불러오지 못했어요.");
+        setReady(true);
+      }
+    })();
+
+    return () => subscription?.unsubscribe();
+  }, []);
+
+  if (!ready) return <Screen>불러오는 중…</Screen>;
+  if (configError) return <Screen>{configError}</Screen>;
+  if (!session) return <Login supabase={supabase} />;
+
+  return <FoodLogWeb session={session} supabase={supabase} />;
+}
+
+// 이메일 코드(OTP) 로그인
+function Login({ supabase }) {
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [step, setStep] = useState("email"); // email | code
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  async function sendCode() {
+    const addr = email.trim();
+    if (!addr || busy) return;
+
+    setBusy(true);
+    setMsg("");
+    const { error } = await supabase.auth.signInWithOtp({
+      email: addr,
+      options: { shouldCreateUser: true },
+    });
+    setBusy(false);
+
+    if (error) {
+      setMsg("코드 전송에 실패했어요: " + error.message);
+      return;
+    }
+    setStep("code");
+    setMsg(`${addr} 로 6자리 코드를 보냈어요.`);
+  }
+
+  async function verify() {
+    const token = code.trim();
+    if (!token || busy) return;
+
+    setBusy(true);
+    setMsg("");
+    const { error } = await supabase.auth.verifyOtp({
+      email: email.trim(),
+      token,
+      type: "email",
+    });
+    setBusy(false);
+
+    if (error) {
+      setMsg("코드가 올바르지 않아요: " + error.message);
+      return;
+    }
+    // onAuthStateChange 가 세션을 잡아 앱 화면으로 전환된다.
+  }
+
+  return (
+    <div style={S.page}>
+      <style>{css}</style>
+      <div style={S.loginBox}>
+        <div style={S.logo}>
+          <span style={S.logoMark}>🍒</span> 왜 먹었지
+        </div>
+        <div style={S.loginSub}>
+          {step === "email"
+            ? "이메일을 입력하면 로그인 코드를 보내드려요."
+            : "이메일로 받은 6자리 코드를 입력하세요."}
+        </div>
+
+        {step === "email" ? (
+          <>
+            <input
+              style={S.searchInput}
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && sendCode()}
+              placeholder="you@example.com"
+              disabled={busy}
+              autoFocus
+            />
+            <button style={S.loginBtn} onClick={sendCode} disabled={busy}>
+              {busy ? "보내는 중…" : "코드 받기"}
+            </button>
+          </>
+        ) : (
+          <>
+            <input
+              style={S.searchInput}
+              inputMode="numeric"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && verify()}
+              placeholder="6자리 코드"
+              disabled={busy}
+              autoFocus
+            />
+            <button style={S.loginBtn} onClick={verify} disabled={busy}>
+              {busy ? "확인 중…" : "로그인"}
+            </button>
+            <button
+              style={S.loginLink}
+              onClick={() => {
+                setStep("email");
+                setCode("");
+                setMsg("");
+              }}
+            >
+              이메일 다시 입력
+            </button>
+          </>
+        )}
+
+        {msg && <div style={S.loginMsg}>{msg}</div>}
+      </div>
+    </div>
+  );
+}
+
+function FoodLogWeb({ session, supabase }) {
   const [today] = useState(() => new Date());
   const [offset, setOffset] = useState(0);
   const [logs, setLogs] = useState({});
@@ -332,7 +518,7 @@ export default function FoodLogWeb() {
 
     async function loadLogs() {
       try {
-        const res = await fetch("/api/logs");
+        const res = await authFetch("/api/logs");
 
         if (!res.ok) {
           throw new Error(`기록 조회 실패: ${res.status}`);
@@ -380,7 +566,7 @@ export default function FoodLogWeb() {
       estimateNutrition(trimmed),
     ]);
 
-    const saveRes = await fetch("/api/logs", {
+    const saveRes = await authFetch("/api/logs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -427,7 +613,7 @@ export default function FoodLogWeb() {
 
   async function removeFood(id) {
     try {
-      const res = await fetch(`/api/logs/${id}`, {
+      const res = await authFetch(`/api/logs/${id}`, {
         method: "DELETE",
       });
 
@@ -470,7 +656,7 @@ export default function FoodLogWeb() {
     }));
 
     try {
-      const res = await fetch(`/api/logs/${id}`, {
+      const res = await authFetch(`/api/logs/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ [field]: next }),
@@ -538,8 +724,19 @@ export default function FoodLogWeb() {
       <div style={S.shell}>
         {/* 헤더 */}
         <header style={S.header}>
-          <div style={S.logo}>
-            <span style={S.logoMark}>🍒</span> 왜 먹었지
+          <div style={S.headerTop}>
+            <div style={S.logo}>
+              <span style={S.logoMark}>🍒</span> 왜 먹었지
+            </div>
+            <div style={S.account}>
+              <span style={S.accountEmail}>{session?.user?.email}</span>
+              <button
+                style={S.logoutBtn}
+                onClick={() => supabase?.auth.signOut()}
+              >
+                로그아웃
+              </button>
+            </div>
           </div>
           <div style={S.sub}>먹은 걸 적으면 AI가 알아서 분류해요</div>
         </header>
@@ -1412,6 +1609,25 @@ const S = {
   shell: { maxWidth: 1040, margin: "0 auto" },
 
   header: { marginBottom: 28 },
+  headerTop: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap",
+  },
+  account: { display: "flex", alignItems: "center", gap: 10 },
+  accountEmail: { fontSize: 12.5, color: "#B0707E", fontWeight: 600 },
+  logoutBtn: {
+    fontSize: 12,
+    fontWeight: 700,
+    color: "#C77E8B",
+    background: "#fff",
+    border: "1px solid #F3D3DB",
+    borderRadius: 10,
+    padding: "5px 11px",
+    cursor: "pointer",
+  },
   logo: {
     fontFamily: "'Jua', 'Pretendard', sans-serif",
     fontSize: 30,
@@ -1421,6 +1637,50 @@ const S = {
   },
   logoMark: { fontFamily: "'Pretendard', sans-serif", marginRight: 8 },
   sub: { marginTop: 6, fontSize: 14, color: "#B0707E" },
+
+  // 로그인 / 전체화면 안내
+  screenBox: {
+    maxWidth: 420,
+    margin: "0 auto",
+    paddingTop: 120,
+    textAlign: "center",
+    color: "#8A5A64",
+    fontSize: 15,
+  },
+  loginBox: {
+    maxWidth: 380,
+    margin: "0 auto",
+    paddingTop: 90,
+    display: "flex",
+    flexDirection: "column",
+    gap: 12,
+  },
+  loginSub: { fontSize: 14, color: "#B0707E", marginBottom: 6, lineHeight: 1.6 },
+  loginBtn: {
+    padding: "13px 16px",
+    borderRadius: 14,
+    border: "none",
+    background: "#E8425A",
+    color: "#fff",
+    fontWeight: 700,
+    fontSize: 15,
+    cursor: "pointer",
+  },
+  loginLink: {
+    background: "none",
+    border: "none",
+    color: "#C77E8B",
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: "pointer",
+    padding: 4,
+  },
+  loginMsg: {
+    fontSize: 13,
+    color: "#8A5A64",
+    lineHeight: 1.6,
+    marginTop: 2,
+  },
 
   grid: {
     display: "grid",

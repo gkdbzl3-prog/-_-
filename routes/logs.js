@@ -28,6 +28,7 @@ router.post("/", async (req, res) => {
     }
 
     const row = {
+        user_id: req.userId,
         log_date: logDate,
         name: name.trim(),
         category,
@@ -77,6 +78,7 @@ router.get("/", async (req, res) => {
     const { data, error } = await supabase
     .from("food_logs")
     .select("*")
+    .eq("user_id", req.userId)
     .order("log_date", { ascending: true })
     .order("created_at", { ascending: true });
 
@@ -125,6 +127,7 @@ router.patch("/:id", async (req, res) => {
         .from("food_logs")
         .update(patch)
         .eq("id", id)
+        .eq("user_id", req.userId)
         .select()
         .single();
 
@@ -146,7 +149,8 @@ router.delete("/:id", async (req, res) => {
     const { error } = await supabase
         .from("food_logs")
         .delete()
-        .eq("id", id);
+        .eq("id", id)
+        .eq("user_id", req.userId);
 
     if (error) {
         console.error("Supabase delete error:", error);
