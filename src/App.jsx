@@ -369,8 +369,8 @@ export default function FoodLogWeb() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // 음식 하나를 분류·칼로리·영양 추정과 함께 저장한다. addFood/빠른 추가에서 공용.
-  async function addFoodByName(name, { targetKey = curKey, openChips = true } = {}) {
+  // 음식 하나를 분류·칼로리·영양 추정과 함께 저장한다.
+  async function addFoodByName(name, { targetKey = curKey } = {}) {
     const trimmed = name.trim();
     if (!trimmed) return null;
 
@@ -406,8 +406,6 @@ export default function FoodLogWeb() {
       ...prev,
       [targetKey]: [...(prev[targetKey] || []), savedItem],
     }));
-
-    if (openChips) setActiveChipId(savedItem.id);
 
     return savedItem;
   }
@@ -1253,7 +1251,7 @@ function FoodItem({
             </div>
           )}
 
-          <div style={S.nutriDisc}>이 식사만 기준으로 한 대략적인 분석이야.</div>
+          <div style={S.nutriDisc}>이 식사만 기준으로 한 대략적인 분석이에요.</div>
         </div>
       )}
 
