@@ -392,7 +392,7 @@ function Login({ supabase }) {
       return;
     }
     setStep("code");
-    setMsg(`${addr} 로 6자리 코드를 보냈어요.`);
+    setMsg(`${addr} 로 8자리 코드를 보냈어요.`);
   }
 
   async function verify() {
@@ -425,7 +425,7 @@ function Login({ supabase }) {
         <div style={S.loginSub}>
           {step === "email"
             ? "이메일을 입력하면 로그인 코드를 보내드려요."
-            : "이메일로 받은 6자리 코드를 입력하세요."}
+            : "이메일로 받은 8자리 코드를 입력하세요."}
         </div>
 
         {step === "email" ? (
@@ -452,7 +452,7 @@ function Login({ supabase }) {
               value={code}
               onChange={(e) => setCode(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && verify()}
-              placeholder="6자리 코드"
+              placeholder="8자리 코드"
               disabled={busy}
               autoFocus
             />
